@@ -96,7 +96,7 @@ def test_train_reload_resume_and_mpc(tmp_path, tiny_config):
     assert np.isfinite(result["mean_return"]) and result["planner"]["action_prior"] == "data"
     assert "success_rate" not in result  # Pendulum has no is_success
     offline = evaluate_model(best, data, horizon=2, max_windows=2)
-    assert len(offline["latent_mse_by_step"]) == 2
+    assert len(offline["latent_mse_by_step"]) == len(offline["persistence_mse_by_step"]) == 2
     train(dataclasses.replace(cfg, epochs=2), data, run, "cpu", resume=run / "last.pt")
     _, _, last = load_checkpoint(run / "last.pt")
     assert last["epoch"] == 1

@@ -129,7 +129,7 @@ def evaluate_model(checkpoint, data, device="auto", horizon=10, max_windows=100)
         max_windows,
         sum(len(range(0, e["steps"] - cfg.history - horizon + 2, horizon)) for e in episodes),
     )
-    latent, reward, termination = [], [], []
+    latent, persistence, reward, termination = [], [], [], []
     with Progress(total_windows, "Evaluating model rollouts", "window") as progress:
         for episode in episodes:
             root = Path(data) / episode["name"]
@@ -145,23 +145,23 @@ def evaluate_model(checkpoint, data, device="auto", horizon=10, max_windows=100)
                 truth = model.encode(p)
                 z = truth[:, : cfg.history]
                 a = torch.tensor(np.array(actions[start:offset]), device=device)[None]
-                le, re, te = [], [], []
+                le, pe, re, te = [], [], [], []
                 for t in range(horizon):
                     current = torch.tensor(np.array(actions[offset + t]), device=device)[None, None]
                     a = torch.cat([a, current], 1)[:, -cfg.history :]
                     prediction = model.predict(z[:, -cfg.history :], a)[:, -1:]
                     r, done = model.outcomes(z[:, -1:], current, prediction)
-                    le.append(
-                        (prediction - truth[:, cfg.history + t : cfg.history + t + 1])
-                        .square()
-                        .mean()
-                        .item()
+                    target = truth[:, cfg.history + t : cfg.history + t + 1]
+                    le.append((prediction - target).square().mean().item())
+                    pe.append(
+                        (truth[:, cfg.history - 1 : cfg.history] - target).square().mean().item()
                     )
                     re.append((r.item() - float(rewards[offset + t])) ** 2)
                     te.append((done.sigmoid().item() - float(terms[offset + t])) ** 2)
                     z = torch.cat([z, prediction], 1)[:, -cfg.history :]
                     a = a[:, -(cfg.history - 1) :] if cfg.history > 1 else a[:, :0]
                 latent.append(le)
+                persistence.append(pe)
                 reward.append(re)
                 termination.append(te)
                 progress.update(latent_mse=f"{le[-1]:.4f}")
@@ -176,6 +176,8 @@ def evaluate_model(checkpoint, data, device="auto", horizon=10, max_windows=100)
         "windows": len(latent),
         "horizon": horizon,
         "latent_mse_by_step": np.mean(latent, 0).tolist(),
+        # Baseline: the last observed embedding, i.e. "nothing changes". A useful model is well below it.
+        "persistence_mse_by_step": np.mean(persistence, 0).tolist(),
         "reward_rmse_by_step": np.sqrt(np.mean(reward, 0)).tolist(),
         "termination_brier_by_step": np.mean(termination, 0).tolist(),
     }
