@@ -12,6 +12,15 @@ def main():
     collect.add_argument("--config", required=True)
     collect.add_argument("--output", required=True)
     collect.add_argument("--checkpoint", help="Collect MPC trajectories instead of random actions")
+    collect.add_argument(
+        "--policy",
+        metavar="MODULE:FACTORY",
+        help="Collect with FACTORY(env, **policy_kwargs), an object with reset() and act(pixels), "
+        "e.g. a scripted expert reading simulator state",
+    )
+    collect.add_argument(
+        "--policy-kwargs", default="{}", metavar="JSON", help="Keyword arguments for --policy"
+    )
     collect.add_argument("--device", default="auto")
     train = sub.add_parser("train", help="Train and save resumable checkpoints")
     train.add_argument("--config", required=True)
@@ -48,8 +57,19 @@ def main():
         from .data import collect
 
         cfg = Config.load(args.config)
-        policy = None
-        if args.checkpoint:
+        policy = make_policy = None
+        if args.checkpoint and args.policy:
+            parser.error("--checkpoint and --policy are mutually exclusive")
+        if args.policy:
+            import functools
+            import importlib
+
+            module, name = args.policy.split(":", 1)
+            make_policy = functools.partial(
+                getattr(importlib.import_module(module), name), **json.loads(args.policy_kwargs)
+            )
+            make_policy.__name__ = args.policy
+        elif args.checkpoint:
             from .planner import MPCPolicy
             from .train import resolve_device
 
@@ -60,7 +80,7 @@ def main():
             for key in ("env_id", "factory", "env_kwargs", "image_size", "action_repeat"):
                 if getattr(cfg, key) != getattr(policy.cfg, key):
                     raise ValueError(f"Collection config/checkpoint mismatch: {key}")
-        result = collect(cfg, args.output, policy)
+        result = collect(cfg, args.output, policy, make_policy)
         print(f"Collected {len(result['episodes'])} episodes into {args.output}")
     elif args.command == "train":
         from .config import Config

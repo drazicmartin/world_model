@@ -78,6 +78,7 @@ These are starting recipes, not tuned hyperparameters. CPU smoke configs are int
 | `pendulum.json` | `Pendulum-v1` | Continuous Box | Motion needs frame history; reward model must distinguish velocity |
 | `mountain_car.json` | `MountainCarContinuous-v0` | Continuous Box | Random data rarely contains successful trajectories; use exploratory/expert data |
 | `custom.json` | Included `DotReach` example | Continuous Box | Demonstrates the factory interface |
+| `grl_landing.json` | [GodotRocketLanding](docs/godot-rocket-landing.md) `GRL/Landing-v0` | Continuous Box | Needs the `grl` package and game; collect demonstrations with `--policy grl.policies:demonstrator` |
 
 Change the JSON files to set collection size, image size, model dimensions, batch size, optimizer, training epochs, and CEM settings. Unknown fields fail early. Defaults are defined in [`config.py`](src/world_model/config.py); the fully resolved config is saved in every run and checkpoint.
 
@@ -152,6 +153,10 @@ world-model train --config configs/custom.json --data data/custom --output runs/
 world-model eval --checkpoint runs/custom/best.pt --output runs/custom/eval.json
 ```
 
+When random actions never reach the interesting states, collect with a scripted expert instead: `--policy MODULE:FACTORY` calls `FACTORY(env, **policy_kwargs)` once the environment exists, and the returned object's `reset()` / `act(pixels)` choose the actions. The expert may read simulator state; only frames, actions and rewards are saved. For example, `world-model collect --config configs/custom.json --output data/custom_expert --policy world_model.example_env:expert --policy-kwargs '{"noise": 0.2}'`.
+
+[GodotRocketLanding](docs/godot-rocket-landing.md) is a complete external example: a Godot rocket-landing simulator whose `grl` package provides the environment, its pixel rendering and a demonstrator for `--policy`.
+
 ## Understand the implementation
 
 | File | Responsibility |
@@ -174,4 +179,4 @@ ruff check .
 ruff format --check .
 ```
 
-Tests cover action round trips, episode boundaries, termination/truncation handling, CEM optimization, rollout alignment, detached outcome heads, training, reload, resume, and closed-loop inference. GitHub Actions runs tests and three-environment smoke training on CPU. Optional videos: `pip install -e '.[video]'`, then add `--video runs/pendulum/episode.mp4` to `eval`.
+Tests cover action round trips, episode boundaries, termination/truncation handling, CEM optimization, rollout alignment, detached outcome heads, training, reload, resume, closed-loop inference, and scripted-expert collection. `tests/test_grl.py` collects from the real GodotRocketLanding game when the `grl` package and binary are installed, and is skipped otherwise. GitHub Actions runs tests and three-environment smoke training on CPU. Optional videos: `pip install -e '.[video]'`, then add `--video runs/pendulum/episode.mp4` to `eval`.

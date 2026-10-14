@@ -36,6 +36,36 @@ def test_custom_factory_cli_from_another_directory(tmp_path, tiny_config):
     assert manifest["complete"] and len(manifest["episodes"]) == cfg.episodes
 
 
+def test_expert_policy_cli(tmp_path, tiny_config):
+    cfg = dataclasses.replace(
+        tiny_config, env_id="DotReach-v0", factory="world_model.example_env:make_env"
+    )
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(cfg.to_dict()))
+    command = [
+        sys.executable,
+        "-m",
+        "world_model.cli",
+        "collect",
+        "--config",
+        str(config_path),
+        "--output",
+        str(tmp_path / "expert"),
+        "--policy",
+        "world_model.example_env:expert",
+        "--policy-kwargs",
+        '{"noise": 0.1, "seed": 3}',
+    ]
+    subprocess.run(command, cwd=tmp_path, check=True, capture_output=True)
+    manifest = json.loads((tmp_path / "expert" / "manifest.json").read_text())
+    assert manifest["complete"] and manifest["policy"] == "world_model.example_env:expert"
+    command[7] = str(tmp_path / "both")
+    rejected = subprocess.run(
+        command + ["--checkpoint", "unused.pt"], cwd=tmp_path, capture_output=True, text=True
+    )
+    assert rejected.returncode != 0 and "mutually exclusive" in rejected.stderr
+
+
 def test_train_reload_resume_and_mpc(tmp_path, tiny_config):
     cfg = tiny_config
     data, run = tmp_path / "data", tmp_path / "run"

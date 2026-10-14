@@ -1,0 +1,29 @@
+{
+  "env_id": "GRL/Landing-v0",
+  "factory": "grl.env:GRLEnv",
+  "env_kwargs": {
+    "level_name": "random_level_easy",
+    "frame_skip": 5,
+    "max_steps": 200,
+    "render_size": 32
+  },
+  "max_steps": 40,
+  "episodes": 8,
+  "epochs": 2,
+  "image_size": 32,
+  "dim": 48,
+  "encoder_depth": 1,
+  "encoder_heads": 3,
+  "patch_size": 8,
+  "predictor_depth": 1,
+  "predictor_heads": 2,
+  "predictor_head_dim": 24,
+  "mlp_dim": 96,
+  "sigreg_projections": 16,
+  "batch_size": 8,
+  "horizon": 3,
+  "population": 16,
+  "elites": 4,
+  "iterations": 2,
+  "candidate_chunk": 16
+}

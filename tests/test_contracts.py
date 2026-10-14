@@ -1,9 +1,14 @@
+import dataclasses
+import functools
 import json
+from pathlib import Path
 import numpy as np
 import pytest
 from gymnasium.spaces import Box, Discrete
+from world_model.config import Config
 from world_model.envs import ActionCodec, step
 from world_model.data import Windows, collect, split_episodes
+from world_model.example_env import expert
 
 
 @pytest.mark.parametrize(
@@ -52,3 +57,28 @@ def test_collection_alignment_and_split(tmp_path, tiny_config):
         assert not np.load(root / "terminated.npy").any()
         assert np.load(root / "truncated.npy")[-1]
     assert json.loads((tmp_path / "data" / "manifest.json").read_text())["complete"]
+
+
+def test_expert_policy_reads_simulator_state(tmp_path, tiny_config):
+    cfg = dataclasses.replace(
+        tiny_config,
+        env_id="DotReach-v0",
+        factory="world_model.example_env:make_env",
+        env_kwargs={"max_steps": 60},
+        max_steps=60,
+    )
+    make_policy = functools.partial(expert, noise=0.0)
+    manifest = collect(cfg, tmp_path / "data", make_policy=make_policy)
+    assert manifest["policy"] == "expert"
+    for episode in manifest["episodes"]:
+        root = tmp_path / "data" / episode["name"]
+        assert np.load(root / "terminated.npy")[-1]  # reached the goal before the time limit
+        assert len(np.load(root / "pixels.npy")) == episode["steps"] + 1
+        assert np.abs(np.load(root / "actions.npy")).max() <= 1.0
+    with pytest.raises(ValueError, match="either"):
+        collect(cfg, tmp_path / "other", policy=object(), make_policy=make_policy)
+
+
+def test_bundled_configs_load():
+    for path in sorted((Path(__file__).resolve().parents[1] / "configs").glob("*.json")):
+        assert Config.load(path).max_steps > 0

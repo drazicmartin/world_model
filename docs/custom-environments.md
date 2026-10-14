@@ -51,6 +51,34 @@ Use a config:
 
 The included `world_model.example_env:make_env` factory uses a rendered blue dot moving toward a green goal; it has no optional physics dependencies. The example is installed with this package and works from any working directory. Install your own environment as a package for the same portability.
 
+## Scripted experts
+
+If random actions rarely reach goals or failures, write an expert that reads simulator state and collect with it:
+
+```python
+# my_robot/expert.py
+class Expert:
+    def __init__(self, env, noise=0.1):
+        self.env = env.unwrapped          # simulator state is readable here, never saved
+        self.noise = noise
+
+    def reset(self):                      # called at every episode start
+        pass
+
+    def act(self, pixels):                # return an action in the environment's own units
+        ...
+
+def make_expert(env, **kwargs):
+    return Expert(env, **kwargs)
+```
+
+```bash
+world-model collect --config my_robot.json --output data/my_robot_expert \
+  --policy my_robot.expert:make_expert --policy-kwargs '{"noise": 0.1}'
+```
+
+`world_model.example_env:expert` does this for `DotReach`. Add noise or random segments so the data also shows mistakes and recoveries the planner may visit.
+
 ## Checklist before a long run
 
 1. Use a smoke-sized config and collect a handful of episodes.

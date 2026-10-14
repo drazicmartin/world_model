@@ -1,0 +1,14 @@
+{
+  "env_id": "GRL/Landing-v0",
+  "factory": "grl.env:GRLEnv",
+  "env_kwargs": {
+    "level_name": "random_level_easy",
+    "frame_skip": 5,
+    "max_steps": 2500,
+    "render_size": 64
+  },
+  "image_size": 64,
+  "max_steps": 500,
+  "episodes": 200,
+  "epochs": 50
+}
