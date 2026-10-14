@@ -14,22 +14,37 @@ def write_manifest(root, manifest):
     temporary.replace(root / "manifest.json")
 
 
-def collect(cfg, root, policy=None):
+def collect(cfg, root, policy=None, make_policy=None):
+    """Random actions by default, or `policy` (reset(), act(pixels)), or `make_policy(env)`.
+
+    `make_policy` builds the policy once the environment exists, so a scripted expert can read simulator
+    state to choose actions. Only frames, actions, rewards and flags are saved.
+    """
+    if policy is not None and make_policy is not None:
+        raise ValueError("Pass either policy or make_policy, not both")
+    if make_policy is not None:
+        func = getattr(make_policy, "func", make_policy)  # functools.partial
+        label = getattr(make_policy, "__name__", getattr(func, "__name__", "custom"))
+    else:
+        label = "random" if policy is None else type(policy).__name__
     stage(
         f"Collection | env={cfg.env_id} | episodes={cfg.episodes} | "
-        f"max_steps/episode={cfg.max_steps} | policy={'random' if policy is None else 'MPC'} | output={root}"
+        f"max_steps/episode={cfg.max_steps} | policy={label} | output={root}"
     )
     root = Path(root)
     root.mkdir(parents=True, exist_ok=False)
     env = make_env(cfg)
     try:
         codec = ActionCodec.from_space(env.action_space)
-        if policy is not None and policy.codec.spec != codec.spec:
+        if make_policy is not None:
+            policy = make_policy(env)
+        if getattr(policy, "codec", None) is not None and policy.codec.spec != codec.spec:
             raise ValueError("Collection policy action space differs from environment")
         manifest = {
             "format": 1,
             "config": cfg.to_dict(),
             "action_spec": codec.spec,
+            "policy": label,
             "episodes": [],
             "complete": False,
         }

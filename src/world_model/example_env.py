@@ -40,3 +40,23 @@ class DotReach(gym.Env):
 
 def make_env(render_mode="rgb_array", **kwargs):
     return DotReach(render_mode=render_mode, **kwargs)
+
+
+class DotExpert:
+    """Scripted expert for `collect --policy`: steers using the true position, which is never saved."""
+
+    def __init__(self, env, noise=0.0, seed=0):
+        self.env = env.unwrapped
+        self.noise = noise
+        self.rng = np.random.default_rng(seed)
+
+    def reset(self):
+        pass
+
+    def act(self, pixels):
+        action = -self.env.position / 0.05 + self.rng.normal(0.0, self.noise, 2)
+        return np.clip(action, -1.0, 1.0).astype(np.float32)
+
+
+def expert(env, noise=0.0, seed=0):
+    return DotExpert(env, noise, seed)
