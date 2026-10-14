@@ -41,6 +41,7 @@ class Config:
     smoothing: float = 0.1
     min_std: float = 0.05
     candidate_chunk: int = 64
+    action_prior: str = "data"
 
     def __post_init__(self):
         for name in (
@@ -74,6 +75,8 @@ class Config:
             raise ValueError("invalid validation_fraction or elites > population")
         if not 0 < self.discount <= 1 or not 0 <= self.smoothing < 1 or self.min_std <= 0:
             raise ValueError("invalid CEM settings")
+        if self.action_prior not in ("data", "uniform"):
+            raise ValueError('action_prior must be "data" or "uniform"')
         if self.workers < 0 or self.preload_max_gb < 0 or self.lr <= 0 or self.sigreg_weight < 0:
             raise ValueError("invalid optimizer / loader settings")
 

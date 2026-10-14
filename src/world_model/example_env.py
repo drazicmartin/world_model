@@ -28,7 +28,7 @@ class DotReach(gym.Env):
         distance = float(np.linalg.norm(self.position))
         terminated = distance < 0.08
         truncated = self.steps >= self.max_steps and not terminated
-        return self.position.copy(), -distance, terminated, truncated, {}
+        return self.position.copy(), -distance, terminated, truncated, {"is_success": terminated}
 
     def render(self):
         canvas = np.full((64, 64, 3), 245, dtype=np.uint8)

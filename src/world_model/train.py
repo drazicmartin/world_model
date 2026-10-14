@@ -62,6 +62,14 @@ def reward_stats(root, episodes):
     return float(mean), float(max(np.sqrt(max(0, total_sq / count - mean * mean)), 1e-3))
 
 
+def action_stats(root, episodes):
+    """Per-dimension mean/std of the encoded actions (category frequencies for one-hot actions)."""
+    actions = np.concatenate(
+        [np.load(Path(root) / e["name"] / "actions.npy") for e in episodes if e["steps"]]
+    ).astype(np.float64)
+    return {"mean": actions.mean(0).tolist(), "std": actions.std(0).tolist()}
+
+
 def run_epoch(model, loader, cfg, device, optimizer=None, description="Batches"):
     model.train(optimizer is not None)
     totals, count = {}, 0
@@ -143,6 +151,7 @@ def train(cfg, data, output, device="auto", resume=None):
     mean, std = reward_stats(data, training)
     model.reward_mean.fill_(mean)
     model.reward_std.fill_(std)
+    action_prior = action_stats(data, training)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     start, best = 0, float("inf")
     output = Path(output)
@@ -208,6 +217,7 @@ def train(cfg, data, output, device="auto", resume=None):
             "upstream_commit": UPSTREAM_COMMIT,
             "config": cfg.to_dict(),
             "action_spec": codec.spec,
+            "action_prior": action_prior,
             "model": model.state_dict(),
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,

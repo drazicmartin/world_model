@@ -57,7 +57,9 @@ def evaluate(
                     start = time.perf_counter()
                     action = env.action_space.sample() if random_policy else policy.act(pixels)
                     latencies.append(time.perf_counter() - start)
-                    reward, terminated, truncated = step(env, action, policy.cfg.action_repeat)
+                    reward, terminated, truncated, info = step(
+                        env, action, policy.cfg.action_repeat, return_info=True
+                    )
                     total += reward
                     progress.update(
                         0, episode=episode + 1, step=t + 1, episode_return=f"{total:.2f}"
@@ -75,21 +77,32 @@ def evaluate(
                         "mean_action_seconds": float(np.mean(latencies)),
                     }
                 )
+                if "is_success" in info:  # Gymnasium's success flag, e.g. a GRL landing
+                    rows[-1]["success"] = bool(info["is_success"])
                 progress.update(1, last_return=f"{total:.2f}")
     finally:
         env.close()
         if writer:
             writer.close()
     returns = np.array([row["return"] for row in rows])
-    stage(f"Policy evaluation complete | mean_return={returns.mean():.2f} | episodes={episodes}")
+    successes = [row["success"] for row in rows if "success" in row]
+    success = f" | success_rate={np.mean(successes):.2f}" if successes else ""
+    stage(
+        f"Policy evaluation complete | mean_return={returns.mean():.2f}{success} | "
+        f"episodes={episodes}"
+    )
     return {
         "policy": "random" if random_policy else "cem",
         "checkpoint": str(checkpoint),
-        "planner": {k: getattr(policy.cfg, k) for k in ("horizon", "population", "iterations")},
+        "planner": {
+            k: getattr(policy.cfg, k)
+            for k in ("horizon", "population", "iterations", "action_prior")
+        },
         "episodes": rows,
         "mean_return": float(returns.mean()),
         "std_return": float(returns.std()),
         "standard_error": float(returns.std(ddof=1) / np.sqrt(episodes)) if episodes > 1 else None,
+        **({"success_rate": float(np.mean(successes))} if successes else {}),
     }
 
 
