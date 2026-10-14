@@ -39,14 +39,18 @@ resized.
 `frame_skip` holds each action for that many physics ticks (1/30 s) inside the game, in one round trip; prefer
 it over `action_repeat`. `GRLEnv`'s own `max_steps` counts physics ticks: keep it at `max_steps × frame_skip`
 (2500 = 500 × 5) so both limits agree. Actions are `Box(4)` in `[-1, 1]` (main engine, left RCS, right RCS,
-legs `> 0` deploys). Rewards come from `GRLEnv.get_reward`: +100 for a landing, −100 for a crash, otherwise a
-small penalty for the distance to the pad and the speed. A landing (terminated) needs the legs down, both feet
+legs `> 0` deploys). Rewards come from `GRLEnv.get_reward`: +100 for a landing, −100 for a crash, otherwise the
+change of `GRLEnv.potential` (closer to the pad, slower, upright, intact, legs down low over the pad), so a step
+that makes progress pays at once. GRL before this reward paid a small penalty for the distance to the pad and
+the speed on every step; datasets collected with it carry those rewards and checkpoints trained on them plan for
+them, so collect again. A landing (terminated) needs the legs down, both feet
 on the pad and the rocket nearly still for 0.5 s. Other levels (`level_1` … `level_4`, `random_level_hard`, …),
 frame skips or render sizes need their own data and checkpoint; `env_kwargs` are checked automatically.
 
 ## Data: demonstrations, not only random actions
 
-Uniform random actions average half thrust, about twice what hovering needs: the rocket climbs away or
+Uniform random actions average half thrust, 2.7 times what hovering needs with a full tank (hovering takes
+about 18 %, action −0.63, and less as propellant burns): the rocket climbs away or
 crashes and the data never shows a landing, so a model trained on it cannot plan one. Collect
 demonstrations with GRL's scripted lander instead (it reads the game state; only frames, actions and rewards
 are saved):

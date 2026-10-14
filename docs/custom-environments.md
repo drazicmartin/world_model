@@ -12,7 +12,7 @@ env.close()
 
 Use Gymnasium `spaces.Discrete` (including nonzero starts) or finite floating-point `spaces.Box` (including multidimensional shapes). Dict/Tuple/MultiDiscrete and unbounded Box actions require a wrapper. Make rendering deterministic with respect to state where practical. The camera should expose task-relevant objects, goals, and motion; never change image geometry between collection and deployment.
 
-The returned observation may be a vector, dict, or image: this pipeline ignores it and trains exclusively on `render()`. Rewards must be finite scalars. Episodes must end explicitly, or collection ends at the configured `max_steps` as a truncation.
+The returned observation may be a vector, dict, or image: this pipeline ignores it and trains exclusively on `render()`. Rewards must be finite scalars. Episodes must end explicitly, or collection ends at the configured `max_steps` as a truncation. If the final step's `info` has Gymnasium's `is_success` flag, `eval` reports it per episode and as a success rate.
 
 An older Gym environment returning `(obs, reward, done, info)` needs an adapter that distinguishes true termination from `info['TimeLimit.truncated']`. Implement or use a compatibility wrapper; do not label every time limit as terminal. Convert its spaces to Gymnasium spaces too.
 
