@@ -11,3 +11,4 @@ build/
 *.mp4
 tmp*/
 pytest-of-root/
+.vscode/

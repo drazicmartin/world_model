@@ -8,7 +8,8 @@ version = "0.1.0"
 description = "LeWorldModel from Gymnasium pixels, with CEM model predictive control"
 requires-python = ">=3.10,<3.13"
 dependencies = [
-  "torch==2.6.0", "gymnasium[classic-control]==1.1.1",
+  "torch",
+  "gymnasium[classic-control]==1.1.1",
   "transformers==4.49.0", "einops==0.8.1",
   "numpy>=1.26,<3", "Pillow>=10,<12", "tqdm>=4.67,<5"
 ]
