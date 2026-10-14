@@ -63,3 +63,7 @@ A larger CPU run used `configs/grl_landing.json` with 60 episodes, a smaller mod
 | Mean | -5,446 | -10,997 |
 
 MPC roughly halved the penalty where random actions fly away from the pad, but it did not land within 500 steps; `eval` does not record whether a terminated episode crashed or landed. Four seeds are not evidence of reliable improvement, and landing with MPC is not established. Planning took about 3 s per step. The headless game keeps one core busy while it waits for the next step, which slowed the planner on this 4-core machine.
+
+## In-memory batch loading
+
+Loader throughput on the 60-episode GodotRocketLanding dataset above (19,091 training windows, 237 MB, batch 64, no model, 4-core CPU): the previous per-window loading with an eight-episode cache gave 15 batches/s (52 with four workers), because shuffled batches reopened most episodes. Streaming with the 64-episode cache gives 105 batches/s (156 with four workers); preloading takes 2.1 s and then gives 1,010 batches/s without workers. Tests check that preloaded and streamed batches are identical and that both train to identical weights; `scripts/smoke.py` reproduced the three-environment returns above exactly, and `pytest -q` passed (21 tests).

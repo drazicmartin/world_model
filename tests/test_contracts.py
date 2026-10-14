@@ -82,3 +82,36 @@ def test_expert_policy_reads_simulator_state(tmp_path, tiny_config):
 def test_bundled_configs_load():
     for path in sorted((Path(__file__).resolve().parents[1] / "configs").glob("*.json")):
         assert Config.load(path).max_steps > 0
+
+
+def test_preloaded_batches_match_streamed(tmp_path, tiny_config):
+    import torch
+    from torch.utils.data import DataLoader, default_convert
+
+    manifest = collect(dataclasses.replace(tiny_config, episodes=3), tmp_path / "data")
+    streamed = Windows(tmp_path / "data", manifest["episodes"], tiny_config.history)
+    preloaded = Windows(tmp_path / "data", manifest["episodes"], tiny_config.history)
+    preloaded.preload()
+    assert sum(a.nbytes for a in preloaded.arrays.values()) == streamed.nbytes()
+    for index in (0, 5, len(streamed) - 1):
+        for key, value in streamed[index].items():
+            assert np.array_equal(value, preloaded[index][key])
+            assert value.dtype == preloaded[index][key].dtype
+
+    def batches(dataset):
+        generator = torch.Generator().manual_seed(7)
+        loader = DataLoader(
+            dataset,
+            batch_size=4,
+            shuffle=True,
+            drop_last=True,
+            generator=generator,
+            collate_fn=default_convert,
+        )
+        return list(loader)
+
+    for a, b in zip(batches(streamed), batches(preloaded), strict=True):
+        assert a.keys() == b.keys()
+        assert all(torch.equal(a[key], b[key]) for key in a)
+    with pytest.raises(ValueError):
+        Config(preload_max_gb=-1)

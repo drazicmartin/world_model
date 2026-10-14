@@ -6,7 +6,7 @@ from pathlib import Path
 import random
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, default_convert
 from .config import Config
 from .data import Windows, split_episodes
 from .envs import ActionCodec
@@ -108,12 +108,28 @@ def train(cfg, data, output, device="auto", resume=None):
     datasets = [Windows(data, episodes, cfg.history) for episodes in (training, validation)]
     if cfg.batch_size < 2 or len(datasets[0]) < cfg.batch_size:
         raise ValueError("Need batch_size >= 2 and at least one full training batch for SIGReg")
+    size = sum(dataset.nbytes() for dataset in datasets)
+    workers = cfg.workers
+    if size <= cfg.preload_max_gb * 1e9:
+        stage(
+            f"Loading dataset into memory | {size / 1e6:.0f} MB <= preload_max_gb="
+            f"{cfg.preload_max_gb} | batches are gathered in-process, no loader workers"
+        )
+        for dataset in datasets:
+            dataset.preload()
+        workers = 0
+    else:
+        stage(
+            f"Streaming dataset from disk | {size / 1e6:.0f} MB > preload_max_gb="
+            f"{cfg.preload_max_gb} | loader workers={workers}"
+        )
     generator = torch.Generator().manual_seed(cfg.seed)
     loader_kwargs = dict(
         batch_size=cfg.batch_size,
-        num_workers=cfg.workers,
+        num_workers=workers,
         pin_memory=device.startswith("cuda"),
-        persistent_workers=cfg.workers > 0,
+        persistent_workers=workers > 0,
+        collate_fn=default_convert,  # Windows.__getitems__ already returns stacked batches
     )
     train_loader = DataLoader(
         datasets[0], shuffle=True, drop_last=True, generator=generator, **loader_kwargs
@@ -139,8 +155,11 @@ def train(cfg, data, output, device="auto", resume=None):
         _, old_cfg, saved = load_checkpoint(resume)
         comparable = cfg.to_dict()
         comparable["epochs"] = old_cfg.epochs
+        comparable["preload_max_gb"] = old_cfg.preload_max_gb  # same batches either way
         if comparable != old_cfg.to_dict() or saved["dataset_fingerprint"] != fingerprint:
-            raise ValueError("Resume requires same config (except epochs) and dataset manifest")
+            raise ValueError(
+                "Resume requires same config (except epochs, preload_max_gb) and dataset manifest"
+            )
         model.load_state_dict(saved["model"])
         optimizer.load_state_dict(saved["optimizer"])
         start, best = saved["epoch"] + 1, saved["best_metric"]
