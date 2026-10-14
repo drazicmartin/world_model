@@ -85,4 +85,5 @@ world-model eval --checkpoint runs/grl_smoke/train/best.pt --episodes 2 --device
 CEM plans 15 steps (2.5 s at `frame_skip` 5) and has no terminal value, while a landing takes tens of seconds
 and ends with a precise, slow touchdown (the feet have no sideways friction, so the rocket must arrive without
 horizontal speed). Expect MPC to improve on random actions in the shaped reward long before it lands; landing
-reliably is not claimed. Compare MPC and random actions on the same seeds, as for the other environments.
+reliably is not claimed. Compare MPC and random actions on the same seeds, as for the other environments. A measured CPU run (dataset, model errors and MPC vs random returns) is in
+[validation](validation.md#godotrocketlanding-integration).
