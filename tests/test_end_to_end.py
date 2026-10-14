@@ -79,8 +79,9 @@ def test_train_reload_resume_and_mpc(tmp_path, tiny_config):
     actions = np.concatenate([np.load(data / name / "actions.npy") for name in training])
     assert np.allclose(saved["action_prior"]["mean"], actions.mean(0), atol=1e-6)
     assert np.allclose(saved["action_prior"]["std"], actions.std(0), atol=1e-6)
+    prior = MPCPolicy.from_checkpoint(best, action_prior="data").cem
+    assert torch.allclose(prior.prior_mean, torch.tensor(actions.mean(0)))
     policy = MPCPolicy.from_checkpoint(best, seed=5)
-    assert torch.allclose(policy.cem.prior_mean, torch.tensor(actions.mean(0)))
     env = make_env(cfg)
     try:
         env.reset(seed=99)
@@ -93,7 +94,7 @@ def test_train_reload_resume_and_mpc(tmp_path, tiny_config):
     finally:
         env.close()
     result = evaluate(best, episodes=1, device="cpu")
-    assert np.isfinite(result["mean_return"]) and result["planner"]["action_prior"] == "data"
+    assert np.isfinite(result["mean_return"]) and result["planner"]["action_prior"] == "uniform"
     assert "success_rate" not in result  # Pendulum has no is_success
     offline = evaluate_model(best, data, horizon=2, max_windows=2)
     assert len(offline["latent_mse_by_step"]) == len(offline["persistence_mse_by_step"]) == 2
@@ -102,21 +103,21 @@ def test_train_reload_resume_and_mpc(tmp_path, tiny_config):
     assert last["epoch"] == 1
 
 
-def test_checkpoint_without_action_prior_needs_uniform_planning(tmp_path, tiny_config):
+def test_data_prior_needs_saved_action_statistics(tmp_path, tiny_config):
     cfg = dataclasses.replace(
         tiny_config, env_id="DotReach-v0", factory="world_model.example_env:make_env"
     )
     collect(cfg, tmp_path / "data")
     best = train(cfg, tmp_path / "data", tmp_path / "run", "cpu")
-    result = evaluate(best, episodes=2, device="cpu")
+    result = evaluate(best, episodes=2, device="cpu", planner_overrides={"action_prior": "data"})
     assert [set(row) >= {"success"} for row in result["episodes"]] == [True, True]
     assert result["success_rate"] == np.mean([row["success"] for row in result["episodes"]])
     saved = torch.load(best, weights_only=True)
     del saved["action_prior"]  # as saved before action priors existed
     torch.save(saved, tmp_path / "old.pt")
-    with pytest.raises(ValueError, match="uniform"):
-        MPCPolicy.from_checkpoint(tmp_path / "old.pt")
-    policy = MPCPolicy.from_checkpoint(tmp_path / "old.pt", action_prior="uniform")
+    with pytest.raises(ValueError, match="predates"):
+        MPCPolicy.from_checkpoint(tmp_path / "old.pt", action_prior="data")
+    policy = MPCPolicy.from_checkpoint(tmp_path / "old.pt")
     assert torch.equal(policy.cem.prior_mean, torch.zeros(2))
     assert torch.equal(policy.cem.prior_std, torch.ones(2))
 

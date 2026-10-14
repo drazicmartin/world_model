@@ -41,7 +41,7 @@ class Config:
     smoothing: float = 0.1
     min_std: float = 0.05
     candidate_chunk: int = 64
-    action_prior: str = "data"
+    action_prior: str = "uniform"
 
     def __post_init__(self):
         for name in (

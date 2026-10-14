@@ -98,10 +98,32 @@ thinks (about 0.5–3 s per step on CPU, much less on a GPU). GRL always starts 
 window only appears on Windows. To record what the planner sees instead, install `.[video]` and add
 `--video runs/grl/episode.mp4` to `world-model eval`.
 
+## Why MPC climbed away instead of landing
+
+Three things stand between CEM and a landing; check them in this order when MPC misbehaves:
+
+1. **Whether the world model predicts anything.** `eval-model` reports `persistence_mse_by_step`, the error of
+   assuming nothing changes. The camera follows the rocket, so consecutive frames are nearly identical and a
+   predictor can look accurate while being worse than that baseline. CEM then ranks plans on noise: the rocket
+   tips over, crashes or drifts away. Train until `latent_mse_by_step` is clearly below the baseline before
+   judging the planner; the CPU models in [validation](validation.md#potential-based-reward-and-action-prior)
+   never got far below it and never landed.
+2. **What the reward pays within the plan.** GRL used to pay `−0.001 × distance − 0.01 × speed` on every
+   step. Over a 15-step plan (2.5 s) moving towards the pad costs about 7 times more in speed penalty than it
+   gains in distance, so the best short plan is to stop and hover. GRL's potential-based reward pays progress
+   on the step it is made. With a near-exact physics model in place of the world model and the same CEM, MPC
+   landed 0 of 4 times with the old reward and 4 of 4 with the new one.
+3. **Where CEM starts.** By default every plan starts at action 0 with standard deviation 1. For the main
+   engine that is 50 % thrust, 2.7 times hover, so when the model cannot tell plans apart the chosen actions
+   average a climb, which is what an uninformative model does. `eval --action-prior data` starts from the
+   training actions' statistics instead (hovering on average); it made no measurable difference with the
+   models measured so far.
+
 ## Limitations
 
 CEM plans 15 steps (2.5 s at `frame_skip` 5) and has no terminal value, while a landing takes tens of seconds
 and ends with a precise, slow touchdown (the feet have no sideways friction, so the rocket must arrive without
-horizontal speed). Expect MPC to improve on random actions in the shaped reward long before it lands; landing
-reliably is not claimed. Compare MPC and random actions on the same seeds, as for the other environments. A measured CPU run (dataset, model errors and MPC vs random returns) is in
-[validation](validation.md#godotrocketlanding-integration).
+horizontal speed). The potential-based reward makes progress visible within the plan, but the model's errors
+over 15 imagined steps decide whether CEM can use it; landing reliably from pixels is not claimed. Compare MPC
+and random actions on the same seeds, as for the other environments. Measured CPU runs (datasets, model
+errors and MPC vs random returns) are in [validation](validation.md#godotrocketlanding-integration).

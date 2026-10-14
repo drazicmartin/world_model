@@ -43,7 +43,7 @@ def main():
             p.add_argument(
                 "--action-prior",
                 choices=("data", "uniform"),
-                help="CEM starts from the training actions' mean/std (data) or mean 0, std 1",
+                help="CEM starts from mean 0, std 1 (uniform) or the training actions' mean/std (data)",
             )
         else:
             p.add_argument("--data", required=True)

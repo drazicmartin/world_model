@@ -80,7 +80,7 @@ class MPCPolicy:
         if cfg.action_prior == "data" and action_prior is None:
             raise ValueError(
                 "action_prior='data' needs the training-action statistics that train() saves in "
-                "checkpoints; retrain, or plan with action_prior='uniform' (eval --action-prior uniform)"
+                "checkpoints; this checkpoint predates them, retrain or use action_prior='uniform'"
             )
         prior = action_prior if cfg.action_prior == "data" else None
         self.cem = CEM(cfg, self.codec, device, seed, prior)
