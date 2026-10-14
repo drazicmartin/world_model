@@ -39,3 +39,31 @@ Datasets and checkpoints were generated locally and are excluded from source con
 ## Progress reporting update
 
 The progress-reporting change passed **14 tests**, lint/format checks, and the full three-environment smoke pipeline. Tests cover disabled output, accurate partial counts, and interrupted-stage reporting in addition to the existing model tests. Collection, training/validation batches, policy evaluation, and held-out model evaluation were exercised with redirected status logs; the inference example was also checked in a terminal. Windows PowerShell was not available for local testing; bars use ASCII characters and tqdm's terminal handling.
+
+## GodotRocketLanding integration
+
+Executed on 2026-10-14 using Python 3.11, PyTorch 2.6.0 (CPU only), Gymnasium 1.1.1 and GodotRocketLanding at commit `bdf492d` (Godot 4.7.2 Linux binary, headless, 4-core CPU, no GPU).
+
+- `pytest -q`: **19 passed**, including both real-game tests in `tests/test_grl.py`; with `grl` absent they are skipped (17 passed, 1 skipped). `ruff check .` and `ruff format --check .` pass. `scripts/smoke.py` reproduced the three-environment returns above exactly.
+- `configs/smoke_grl_landing.json`: random and `--policy grl.policies:demonstrator` collection, training, CEM and random evaluation and `eval-model` all completed through the CLI.
+
+A larger CPU run used `configs/grl_landing.json` with 60 episodes, a smaller model (`dim` 96, 4 encoder and 3 predictor layers, `mlp_dim` 384, 128 SIGReg projections, batch 32, `lr` 0.0002), 6 epochs and CEM with 128 candidates, 16 elites and 3 iterations:
+
+- Collection with `--policy grl.policies:demonstrator --policy-kwargs '{"noise": 0.1}'` took 70 s: 21,285 transitions, 46 landings, 12 time limits and 2 crashes.
+- Training took about 1.8 minutes per epoch. The best held-out metric (0.369) came at epoch 3; validation loss rose afterwards, so 54 training episodes are too few for longer training.
+- `eval-model --horizon 10` (100 held-out windows): latent MSE grew from 0.016 to 0.340 over the 10 steps; reward RMSE was 0.31–0.38 for steps 1–9 and 10.0 at step 10, where a window includes a ±100 terminal reward; termination Brier error stayed at or below 0.01.
+- Closed-loop evaluation on seeds 100000–100003 (500-step cap):
+
+| Seed | MPC return (steps) | Random return (steps) |
+|---|---:|---:|
+| 100000 | -9,899 (500, time limit) | -21,272 (500, time limit) |
+| 100001 | -10,683 (500, time limit) | -22,164 (500, time limit) |
+| 100002 | -965 (182, terminated) | -321 (73, terminated) |
+| 100003 | -238 (58, terminated) | -233 (57, terminated) |
+| Mean | -5,446 | -10,997 |
+
+MPC roughly halved the penalty where random actions fly away from the pad, but it did not land within 500 steps; `eval` does not record whether a terminated episode crashed or landed. Four seeds are not evidence of reliable improvement, and landing with MPC is not established. Planning took about 3 s per step. The headless game keeps one core busy while it waits for the next step, which slowed the planner on this 4-core machine.
+
+## In-memory batch loading
+
+Loader throughput on the 60-episode GodotRocketLanding dataset above (19,091 training windows, 237 MB, batch 64, no model, 4-core CPU): the previous per-window loading with an eight-episode cache gave 15 batches/s (52 with four workers), because shuffled batches reopened most episodes. Streaming with the 64-episode cache gives 105 batches/s (156 with four workers); preloading takes 2.1 s and then gives 1,010 batches/s without workers. Tests check that preloaded and streamed batches are identical and that both train to identical weights; `scripts/smoke.py` reproduced the three-environment returns above exactly, and `pytest -q` passed (21 tests).

@@ -80,9 +80,24 @@ world-model eval --checkpoint runs/grl_smoke/train/best.pt --episodes 2 --device
 `tests/test_grl.py` runs a short random and demonstrator collection against the real game; it is skipped when
 `grl` or its binary is not installed (as in CI).
 
+## Watch a trained model in the game window
+
+```bash
+python -m examples.grl_watch --checkpoint runs/grl/best.pt --seed 7 --episodes 3 --zoom 1.0
+```
+
+Run it from the repository root. It opens the real game window (full resolution, real time) while the planner
+still acts on the small state-drawn frames it was trained on, and prints each episode's outcome (`victory`,
+`crash` or `running` at the step limit). Each seed gives a new start and pad placement; `--level` picks another
+GRL level, outside the training data unless you trained on it. The window holds still while the planner
+thinks (about 0.5–3 s per step on CPU, much less on a GPU). GRL always starts the game headless on Linux, so the
+window only appears on Windows. To record what the planner sees instead, install `.[video]` and add
+`--video runs/grl/episode.mp4` to `world-model eval`.
+
 ## Limitations
 
 CEM plans 15 steps (2.5 s at `frame_skip` 5) and has no terminal value, while a landing takes tens of seconds
 and ends with a precise, slow touchdown (the feet have no sideways friction, so the rocket must arrive without
 horizontal speed). Expect MPC to improve on random actions in the shaped reward long before it lands; landing
-reliably is not claimed. Compare MPC and random actions on the same seeds, as for the other environments.
+reliably is not claimed. Compare MPC and random actions on the same seeds, as for the other environments. A measured CPU run (dataset, model errors and MPC vs random returns) is in
+[validation](validation.md#godotrocketlanding-integration).
