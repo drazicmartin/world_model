@@ -10,5 +10,7 @@
   "image_size": 64,
   "max_steps": 500,
   "episodes": 200,
-  "epochs": 50
+  "epochs": 50,
+  "batch_size": 256,
+  "workers": 30
 }
