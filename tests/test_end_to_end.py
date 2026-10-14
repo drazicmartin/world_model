@@ -109,3 +109,16 @@ def test_outcome_losses_do_not_change_representation(tiny_config):
     (losses["reward"] + losses["termination"]).backward()
     assert all(p.grad is None for p in model.jepa.parameters())
     assert any(p.grad is not None for p in model.outcome.parameters())
+
+
+def test_preloading_does_not_change_training(tmp_path, tiny_config):
+    collect(tiny_config, tmp_path / "data")
+    runs = {}
+    for name, limit in (("streamed", 0.0), ("preloaded", 4.0)):
+        cfg = dataclasses.replace(tiny_config, preload_max_gb=limit)
+        model, _, _ = load_checkpoint(train(cfg, tmp_path / "data", tmp_path / name, "cpu"))
+        runs[name] = model.state_dict()
+    assert all(torch.equal(runs["streamed"][k], runs["preloaded"][k]) for k in runs["streamed"])
+    # preload_max_gb only changes how batches are read, so it may differ on resume
+    cfg = dataclasses.replace(tiny_config, epochs=2, preload_max_gb=0.0)
+    train(cfg, tmp_path / "data", tmp_path / "preloaded", "cpu", tmp_path / "preloaded" / "last.pt")

@@ -80,7 +80,7 @@ These are starting recipes, not tuned hyperparameters. CPU smoke configs are int
 | `custom.json` | Included `DotReach` example | Continuous Box | Demonstrates the factory interface |
 | `grl_landing.json` | [GodotRocketLanding](docs/godot-rocket-landing.md) `GRL/Landing-v0` | Continuous Box | Needs the `grl` package and game; collect demonstrations with `--policy grl.policies:demonstrator` |
 
-Change the JSON files to set collection size, image size, model dimensions, batch size, optimizer, training epochs, and CEM settings. Unknown fields fail early. Defaults are defined in [`config.py`](src/world_model/config.py); the fully resolved config is saved in every run and checkpoint.
+Change the JSON files to set collection size, image size, model dimensions, batch size, optimizer, training epochs, and CEM settings. Unknown fields fail early. Training loads datasets of up to `preload_max_gb` (default 4) into memory, where each batch is gathered in one indexing step; larger datasets stream from disk, using `workers` loader processes. Defaults are defined in [`config.py`](src/world_model/config.py); the fully resolved config is saved in every run and checkpoint.
 
 To resume, increase `epochs` in the same config (it means **total** epochs) and use:
 

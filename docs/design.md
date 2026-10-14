@@ -21,9 +21,9 @@ data/pendulum/
     ...
 ```
 
-The manifest includes format version, full collection config, action bounds/categories, episode lengths/seeds/returns, and a completion flag. It is atomically finalized after collection. Interrupted datasets remain incomplete and cannot train accidentally. Episode files are uncompressed for efficient mmap access; an eight-episode per-worker cache bounds open mappings. Frames stay uint8 on disk and are normalized to `[-1,1]` only for encoding.
+The manifest includes format version, full collection config, action bounds/categories, episode lengths/seeds/returns, and a completion flag. It is atomically finalized after collection. Interrupted datasets remain incomplete and cannot train accidentally. Episode files are uncompressed for efficient mmap access. Training copies the arrays into memory when they total at most `preload_max_gb` (default 4) and gathers each batch with one vectorised index (`Windows.__getitems__`), so no loader workers are needed; larger datasets are streamed from the memory-mapped files through a 64-episode per-worker cache. Both paths produce identical batches, so `preload_max_gb` may change on resume. Frames stay uint8 on disk and are normalized to `[-1,1]` only for encoding.
 
-Uncompressed 64×64 RGB requires roughly 1.23 GB per 100,000 frames. Collection holds one episode's frames in memory. Very long episodes should be capped or use a streaming collector extension. DataLoader workers default to zero for portable execution; increase on Linux after checking storage throughput.
+Uncompressed 64×64 RGB requires roughly 1.23 GB per 100,000 frames. Collection holds one episode's frames in memory. Very long episodes should be capped or use a streaming collector extension. DataLoader `workers` default to zero for portable execution and only apply when streaming; increase them after checking storage throughput.
 
 ## Training
 

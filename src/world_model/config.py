@@ -27,6 +27,7 @@ class Config:
     lr: float = 0.00005
     weight_decay: float = 0.001
     workers: int = 0
+    preload_max_gb: float = 4.0
     seed: int = 42
     episodes: int = 200
     max_steps: int = 500
@@ -73,7 +74,7 @@ class Config:
             raise ValueError("invalid validation_fraction or elites > population")
         if not 0 < self.discount <= 1 or not 0 <= self.smoothing < 1 or self.min_std <= 0:
             raise ValueError("invalid CEM settings")
-        if self.workers < 0 or self.lr <= 0 or self.sigreg_weight < 0:
+        if self.workers < 0 or self.preload_max_gb < 0 or self.lr <= 0 or self.sigreg_weight < 0:
             raise ValueError("invalid optimizer / loader settings")
 
     @classmethod
