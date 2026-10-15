@@ -45,7 +45,7 @@ The transition reward is counted before multiplying survival by `1-sigmoid(termi
 
 ## Evaluating honestly
 
-`eval-model` reuses the checkpoint's held-out episode split on the original immutable dataset. It reports multi-step latent MSE, raw reward RMSE, and termination Brier error under recorded actions. Lower latent MSE alone is not proof of a useful model: collapsed representations also predict easily. Inspect `latent_std`, reward error, termination error, and real control returns together.
+`eval-model` reuses the checkpoint's held-out episode split on the original immutable dataset. It reports multi-step latent MSE, raw reward RMSE, and termination Brier error under recorded actions, plus `persistence_mse_by_step`: the error of predicting that the last observed embedding never changes. A predictor that is not clearly below that baseline has not learned the dynamics, and CEM on it plans on noise; train longer or on more data before tuning the planner. Lower latent MSE alone is not proof of a useful model: collapsed representations also predict easily. Inspect `latent_std`, reward error, termination error, and real control returns together.
 
 `eval` reports every seed's return/length/termination and action latency, aggregate mean, population standard deviation, and estimated standard error. The default evaluation seed block differs from default collection seeds; if changing seeds, ensure the blocks do not overlap. Use identical evaluation seeds for random and MPC comparisons, multiple independent training seeds, and enough test episodes before claiming improvement.
 

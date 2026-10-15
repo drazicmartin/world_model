@@ -64,6 +64,42 @@ A larger CPU run used `configs/grl_landing.json` with 60 episodes, a smaller mod
 
 MPC roughly halved the penalty where random actions fly away from the pad, but it did not land within 500 steps; `eval` does not record whether a terminated episode crashed or landed. Four seeds are not evidence of reliable improvement, and landing with MPC is not established. Planning took about 3 s per step. The headless game keeps one core busy while it waits for the next step, which slowed the planner on this 4-core machine.
 
+## Potential-based reward and action prior
+
+Executed on 2026-10-14 using Python 3.11, PyTorch 2.6.0 (CPU only, 4 cores), Gymnasium 1.1.1 and GodotRocketLanding at commit `c5d287f`, which replaced GRL's per-step penalty `−0.001 × distance − 0.01 × speed` with the change of a potential (distance to the pad, speed, tilt, integrity, legs down low over the pad) and ±100 for a landing or crash. A GPU run of `configs/grl_landing.json` with the old reward had climbed away (seed 100000: return −17,591 over 500 steps).
+
+**Planner and reward without a learned model.** A Python re-implementation of the game's free-flight physics (gravity, drag, thrust, RCS torque with a fitted moment of inertia; one-step velocity error below 0.01 px/s on 3,078 real transitions in the median) replaced the world model, with simple ground contact and the game's 0.5 s settle rule. CEM used this repository's settings for `grl_landing.json` (horizon 15, 256 candidates, 32 elites, 5 iterations, best candidate executed) and acted in the real game, seeds 100000–100003, 500 steps:
+
+| Reward | CEM start | Landed | Final distance to pad centre (px) |
+|---|---|---:|---|
+| Old per-step penalty | mean 0, std 1 | 0/4 | 508, 966, 822, 701 |
+| Potential | mean 0, std 1 | 4/4 | 42, 42, 40, 39 (pad half-width 45) |
+| Potential | demonstration mean/std | 3/4 | 40, 43, 8 (on the pad, not yet settled), 41 |
+| Potential + fuel cost (1 per step at full thrust) | mean 0, std 1 | 1/4 | 41, 802, 1217, 964 |
+
+With the old reward the planner stopped and hovered or set down where it was. A fuel cost made it set down early wherever it was, so GRL's reward has none.
+
+**Learned model.** `collect --policy grl.policies:demonstrator` gave 80 episodes with `noise` 0.1 (62 landings, 2 crashes, 16 time limits) and 40 with `noise` 0.3 and another seed range (5 landings, 1 crash, 34 time limits), merged into one dataset of 47,264 transitions as described in [design](design.md#better-data). The model was the reduced CPU recipe above (`dim` 96, 4 encoder and 3 predictor layers, `mlp_dim` 384, 128 SIGReg projections, batch 32, `lr` 0.0002), trained for 18 epochs (best held-out metric at epoch 17); CEM used 128 candidates, 16 elites and 3 iterations (about 1.1 s per step on one thread).
+
+`eval-model --horizon 15` on 100 held-out windows, latent MSE against the persistence baseline at steps 1 / 5 / 10 / 15:
+
+| Checkpoint | Latent MSE | Persistence MSE | Reward RMSE (steps 1 → 15) |
+|---|---|---|---|
+| Epoch 10 | 0.009 / 0.089 / 0.264 / 0.518 | 0.007 / 0.077 / 0.204 / 0.371 | 0.73 → 0.98 |
+| Epoch 17 | 0.008 / 0.071 / 0.188 / 0.358 | 0.009 / 0.083 / 0.226 / 0.404 | 0.71 → 0.87 |
+
+At epoch 10 the predictor was worse than assuming nothing changes at every step; at epoch 17 it was about 11 % better. Closed loop on seeds 100000–100003 with the epoch-17 checkpoint (500-step cap):
+
+| Policy | Returns (steps) | Mean | Landed |
+|---|---|---:|---:|
+| MPC, `--action-prior uniform` (default) | −1,676 (500), −1,530 (500), −257 (54), −240 (47) | −926 | 0/4 |
+| MPC, `--action-prior data` | −2,128 (500), −1,766 (346), −269 (63), −273 (45) | −1,109 | 0/4 |
+| Random actions | −7,400 (500), −6,737 (500), −329 (73), −279 (57) | −3,686 | 0/4 |
+
+MPC beat random actions but did not land, and starting CEM from the demonstrations' action statistics did not change that. In replayed episodes the rocket tilted over (past 1 rad) and then crashed or drifted away. Along one replay (epoch-10 checkpoint, seed 100001) the model's predicted return of the chosen plan stayed near +15 to +20 while the near-exact physics model gave the same plans −2, falling to −28 and then a crash: the world model, not the reward or the planner, is what stops these runs from landing. Predicting embedding changes instead of next embeddings (a residual predictor) beat the persistence baseline sooner (8 % below it after 5 epochs) but crashed or drifted away on seeds 100001–100003 the same way, whether CEM executed its best candidate or its mean, and was not kept.
+
+`pytest -q`: 24 passed with GRL installed. With `--action-prior uniform`, the default, the smoke checkpoints reproduced the MPC returns above to within 2e-5; with `--action-prior data` they were CartPole 9.50, Pendulum −216.59 and MountainCarContinuous −3.82.
+
 ## In-memory batch loading
 
 Loader throughput on the 60-episode GodotRocketLanding dataset above (19,091 training windows, 237 MB, batch 64, no model, 4-core CPU): the previous per-window loading with an eight-episode cache gave 15 batches/s (52 with four workers), because shuffled batches reopened most episodes. Streaming with the 64-episode cache gives 105 batches/s (156 with four workers); preloading takes 2.1 s and then gives 1,010 batches/s without workers. Tests check that preloaded and streamed batches are identical and that both train to identical weights; `scripts/smoke.py` reproduced the three-environment returns above exactly, and `pytest -q` passed (21 tests).

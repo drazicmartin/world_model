@@ -78,12 +78,16 @@ class ActionCodec:
         )
 
 
-def step(env, action, repeat):
-    """One model transition equals repeat simulator steps; never cross a reset."""
+def step(env, action, repeat, return_info=False):
+    """One model transition equals repeat simulator steps; never cross a reset.
+
+    With `return_info`, the last simulator step's info dict is returned as a fourth value."""
     total = 0.0
     for _ in range(repeat):
-        _, reward, terminated, truncated, _ = env.step(action)
+        _, reward, terminated, truncated, info = env.step(action)
         total += float(reward)
         if terminated or truncated:
             break
+    if return_info:
+        return total, bool(terminated), bool(truncated), info
     return total, bool(terminated), bool(truncated)

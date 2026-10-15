@@ -57,7 +57,9 @@ def evaluate(
                     start = time.perf_counter()
                     action = env.action_space.sample() if random_policy else policy.act(pixels)
                     latencies.append(time.perf_counter() - start)
-                    reward, terminated, truncated = step(env, action, policy.cfg.action_repeat)
+                    reward, terminated, truncated, info = step(
+                        env, action, policy.cfg.action_repeat, return_info=True
+                    )
                     total += reward
                     progress.update(
                         0, episode=episode + 1, step=t + 1, episode_return=f"{total:.2f}"
@@ -75,21 +77,32 @@ def evaluate(
                         "mean_action_seconds": float(np.mean(latencies)),
                     }
                 )
+                if "is_success" in info:  # Gymnasium's success flag, e.g. a GRL landing
+                    rows[-1]["success"] = bool(info["is_success"])
                 progress.update(1, last_return=f"{total:.2f}")
     finally:
         env.close()
         if writer:
             writer.close()
     returns = np.array([row["return"] for row in rows])
-    stage(f"Policy evaluation complete | mean_return={returns.mean():.2f} | episodes={episodes}")
+    successes = [row["success"] for row in rows if "success" in row]
+    success = f" | success_rate={np.mean(successes):.2f}" if successes else ""
+    stage(
+        f"Policy evaluation complete | mean_return={returns.mean():.2f}{success} | "
+        f"episodes={episodes}"
+    )
     return {
         "policy": "random" if random_policy else "cem",
         "checkpoint": str(checkpoint),
-        "planner": {k: getattr(policy.cfg, k) for k in ("horizon", "population", "iterations")},
+        "planner": {
+            k: getattr(policy.cfg, k)
+            for k in ("horizon", "population", "iterations", "action_prior")
+        },
         "episodes": rows,
         "mean_return": float(returns.mean()),
         "std_return": float(returns.std()),
         "standard_error": float(returns.std(ddof=1) / np.sqrt(episodes)) if episodes > 1 else None,
+        **({"success_rate": float(np.mean(successes))} if successes else {}),
     }
 
 
@@ -116,7 +129,7 @@ def evaluate_model(checkpoint, data, device="auto", horizon=10, max_windows=100)
         max_windows,
         sum(len(range(0, e["steps"] - cfg.history - horizon + 2, horizon)) for e in episodes),
     )
-    latent, reward, termination = [], [], []
+    latent, persistence, reward, termination = [], [], [], []
     with Progress(total_windows, "Evaluating model rollouts", "window") as progress:
         for episode in episodes:
             root = Path(data) / episode["name"]
@@ -132,23 +145,23 @@ def evaluate_model(checkpoint, data, device="auto", horizon=10, max_windows=100)
                 truth = model.encode(p)
                 z = truth[:, : cfg.history]
                 a = torch.tensor(np.array(actions[start:offset]), device=device)[None]
-                le, re, te = [], [], []
+                le, pe, re, te = [], [], [], []
                 for t in range(horizon):
                     current = torch.tensor(np.array(actions[offset + t]), device=device)[None, None]
                     a = torch.cat([a, current], 1)[:, -cfg.history :]
                     prediction = model.predict(z[:, -cfg.history :], a)[:, -1:]
                     r, done = model.outcomes(z[:, -1:], current, prediction)
-                    le.append(
-                        (prediction - truth[:, cfg.history + t : cfg.history + t + 1])
-                        .square()
-                        .mean()
-                        .item()
+                    target = truth[:, cfg.history + t : cfg.history + t + 1]
+                    le.append((prediction - target).square().mean().item())
+                    pe.append(
+                        (truth[:, cfg.history - 1 : cfg.history] - target).square().mean().item()
                     )
                     re.append((r.item() - float(rewards[offset + t])) ** 2)
                     te.append((done.sigmoid().item() - float(terms[offset + t])) ** 2)
                     z = torch.cat([z, prediction], 1)[:, -cfg.history :]
                     a = a[:, -(cfg.history - 1) :] if cfg.history > 1 else a[:, :0]
                 latent.append(le)
+                persistence.append(pe)
                 reward.append(re)
                 termination.append(te)
                 progress.update(latent_mse=f"{le[-1]:.4f}")
@@ -163,6 +176,8 @@ def evaluate_model(checkpoint, data, device="auto", horizon=10, max_windows=100)
         "windows": len(latent),
         "horizon": horizon,
         "latent_mse_by_step": np.mean(latent, 0).tolist(),
+        # Baseline: the last observed embedding, i.e. "nothing changes". A useful model is well below it.
+        "persistence_mse_by_step": np.mean(persistence, 0).tolist(),
         "reward_rmse_by_step": np.sqrt(np.mean(reward, 0)).tolist(),
         "termination_brier_by_step": np.mean(termination, 0).tolist(),
     }

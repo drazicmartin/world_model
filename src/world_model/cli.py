@@ -40,6 +40,11 @@ def main():
             p.add_argument("--video")
             for name in ("horizon", "population", "elites", "iterations", "candidate-chunk"):
                 p.add_argument(f"--{name}", type=int)
+            p.add_argument(
+                "--action-prior",
+                choices=("data", "uniform"),
+                help="CEM starts from mean 0, std 1 (uniform) or the training actions' mean/std (data)",
+            )
         else:
             p.add_argument("--data", required=True)
             p.add_argument("--horizon", type=int, default=10)
@@ -96,7 +101,14 @@ def main():
         if args.command == "eval":
             overrides = {
                 key: getattr(args, key)
-                for key in ("horizon", "population", "elites", "iterations", "candidate_chunk")
+                for key in (
+                    "horizon",
+                    "population",
+                    "elites",
+                    "iterations",
+                    "candidate_chunk",
+                    "action_prior",
+                )
                 if getattr(args, key) is not None
             }
             result = evaluate(

@@ -38,7 +38,7 @@ Every command announces what it will run, including the environment, relevant de
 
 - **Collection:** episode progress with the current episode/step and last episode return; completion confirms where data was saved.
 - **Training:** setup and dataset sizes, reward-statistics progress, epoch numbers, separate training/validation batch bars with running loss, checkpoint-save messages, and a compact epoch summary. Full metrics remain in `metrics.jsonl`.
-- **Policy evaluation:** episode progress, current step/return, and the final mean return.
+- **Policy evaluation:** episode progress, current step/return, and the final mean return (plus the success rate when the environment reports `info["is_success"]`).
 - **Model evaluation:** completed rollout windows and the latest final-step latent error.
 - **Smoke script:** announces each environment and runs the same stage reporting throughout.
 - **Inference example:** checkpoint loading, environment settings, and step progress. An episode that ends early retains its actual step count.
@@ -127,8 +127,9 @@ At each environment step, CEM samples action sequences, rolls out latent dynamic
 
 - Continuous actions: bounded Gaussian sampling in normalized `[-1, 1]` coordinates.
 - Discrete actions: categorical sampling and elite-frequency updates, without continuous rounding.
+- Action prior: plans start from mean 0 and standard deviation 1 (or equal probabilities), the middle of the action range, which need not be a sensible action: in GodotRocketLanding it is 2.7 times hover thrust, so a planner whose model cannot tell plans apart climbs. `"action_prior": "data"` (or `eval --action-prior data`) starts instead from the per-dimension mean and standard deviation of the training actions (category frequencies for discrete actions), which `train` saves in every checkpoint, so candidates start where the model has data. It did not change GodotRocketLanding results measurably in [validation](docs/validation.md#potential-based-reward-and-action-prior).
 - Candidate rollouts are vectorized and chunked; the current frame is encoded once per control step.
-- Previous CEM means/probabilities warm-start the next plan; history and plans reset per episode.
+- Previous CEM means/probabilities warm-start the next plan, padded with the prior; history and plans reset per episode.
 - Rewards are weighted by predicted survival. Time-limit truncation never becomes a terminal training target.
 
 Override planning cost/quality tradeoffs without retraining:
